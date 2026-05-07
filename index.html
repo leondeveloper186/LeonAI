@@ -4,34 +4,452 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LeonAI</title>
-    <!-- Tailwind for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React and Babel (to run JSX in the browser) -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-        body { 
-            background-color: #18181B; 
-            color: #E4E4E7; 
-            font-family: 'Inter', sans-serif; 
-            margin: 0;
-            padding: 0;
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500&family=JetBrains+Mono&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #18181B;
+            color: #E4E4E7;
+            overflow: hidden;
+        }
+
+        .font-serif { font-family: 'Playfair Display', serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3F3F46;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #52525B;
+        }
+
+        .selection-amber::selection {
+            background: #D4896A;
+            color: white;
+        }
+
+        .message-fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .loader-dots div {
+            animation: loader-dots 0.6s infinite alternate;
+        }
+        @keyframes loader-dots {
+            from { opacity: 0.2; }
+            to { opacity: 1; }
         }
     </style>
 </head>
-<body>
-    <div id="root"></div>
+<body class="selection-amber">
+    <div class="flex flex-col h-screen bg-[#18181B]">
+        <!-- Header -->
+        <header class="flex-none flex items-center justify-between px-6 py-4 border-b border-[#27272A] bg-[#18181B] sticky top-0 z-10">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-md bg-[#27272A] flex items-center justify-center border border-[#3F3F46]">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-[#F4F4F5]"></i>
+                </div>
+                <h1 class="font-serif text-xl font-medium text-[#F4F4F5]">LeonAI</h1>
+            </div>
+            <div class="relative">
+                <button id="optionsBtn" class="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#3F3F46] text-sm font-medium hover:bg-[#27272A] transition-colors text-[#D4D4D8]">
+                    <i data-lucide="settings" class="w-4 h-4 text-[#A1A1AA]"></i>
+                    Options
+                </button>
+                <!-- Options Menu -->
+                <div id="optionsMenu" class="hidden absolute right-0 mt-2 w-72 bg-[#1E1E24] rounded-xl shadow-2xl border border-[#3F3F46] p-2 z-50">
+                    <div class="space-y-1" id="toggleList">
+                        <!-- Toggles injected via JS -->
+                    </div>
+                </div>
+            </div>
+        </header>
 
-    <!-- This script loads your actual React logic from your react.js file -->
-    <script type="text/babel" data-type="module">
-        // Import the code from your react.js file
-        import App from './react.js';
+        <!-- Chat Container -->
+        <div id="chatContainer" class="flex-1 overflow-y-auto w-full scroll-smooth">
+            <div id="messagesList" class="max-w-3xl mx-auto px-4 py-8 flex flex-col gap-8">
+                <!-- Empty State -->
+                <div id="emptyState" class="flex flex-col items-center justify-center mt-32 text-center space-y-4 opacity-80">
+                    <div class="w-16 h-16 rounded-2xl bg-[#27272A] flex items-center justify-center mb-4 border border-[#3F3F46]">
+                        <i data-lucide="sparkles" class="w-8 h-8 text-[#D4896A]"></i>
+                    </div>
+                    <h2 class="font-serif text-3xl text-[#F4F4F5]">Hi Leon, how can I help?</h2>
+                </div>
+            </div>
+            <div id="anchor"></div>
+        </div>
 
-        // Render the App component into the root div
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        <!-- Input Area -->
+        <div class="flex-none w-full bg-[#18181B] pt-4 pb-6">
+            <div class="max-w-3xl mx-auto px-4 relative">
+                <div class="bg-[#27272A] border border-[#3F3F46] rounded-2xl flex flex-col p-2">
+                    <textarea
+                        id="userInput"
+                        placeholder="Type here..."
+                        class="w-full bg-transparent border-none focus:ring-0 focus:outline-none resize-none px-3 py-2 text-[15px] placeholder-[#71717A] text-[#E4E4E7] min-h-[52px]"
+                        rows="1"
+                    ></textarea>
+                    <div class="flex justify-between items-center mt-1 px-1">
+                        <button class="p-2 text-[#A1A1AA] hover:text-[#F4F4F5] hover:bg-[#3F3F46] rounded-lg">
+                            <i data-lucide="paperclip" class="w-[18px] h-[18px]"></i>
+                        </button>
+                        <button 
+                            id="sendBtn"
+                            class="p-2 rounded-lg flex items-center justify-center transition-all bg-[#3F3F46] text-[#71717A] cursor-not-allowed disabled:opacity-50"
+                            disabled
+                        >
+                            <i data-lucide="send" class="w-[18px] h-[18px]"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const apiKey = "";
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'leon-ai-html';
+
+        const state = {
+            messages: [],
+            options: {
+                structOut: false,
+                codeExec: false,
+                googleSearch: false,
+                urlContext: false,
+                genImage: false
+            },
+            isLoading: false
+        };
+
+        // --- UI Logic ---
+
+        const elements = {
+            optionsBtn: document.getElementById('optionsBtn'),
+            optionsMenu: document.getElementById('optionsMenu'),
+            toggleList: document.getElementById('toggleList'),
+            userInput: document.getElementById('userInput'),
+            sendBtn: document.getElementById('sendBtn'),
+            messagesList: document.getElementById('messagesList'),
+            emptyState: document.getElementById('emptyState'),
+            chatContainer: document.getElementById('chatContainer'),
+            anchor: document.getElementById('anchor')
+        };
+
+        const toggles = [
+            { key: 'structOut', label: 'Structured outputs', icon: 'file-json' },
+            { key: 'codeExec', label: 'Code execution', icon: 'code' },
+            { key: 'googleSearch', label: 'Grounding with Google', icon: 'search' },
+            { key: 'urlContext', label: 'URL context', icon: 'link' },
+            { key: 'genImage', label: 'Generate Image', icon: 'image' }
+        ];
+
+        function initToggles() {
+            elements.toggleList.innerHTML = toggles.map(t => `
+                <div class="flex items-center justify-between py-2.5 px-3 hover:bg-[#303036] rounded-lg cursor-pointer transition-colors" data-toggle="${t.key}">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="${t.icon}" class="w-[18px] h-[18px] ${state.options[t.key] ? 'text-[#E5A58A]' : 'text-[#A1A1AA]'}"></i>
+                        <span class="text-sm font-medium text-[#E4E4E7]">${t.label}</span>
+                    </div>
+                    <div class="w-8 h-4.5 flex items-center rounded-full p-0.5 transition-colors duration-200 ease-in-out ${state.options[t.key] ? 'bg-[#D4896A]' : 'bg-[#52525B]'}">
+                        <div class="bg-[#F4F4F5] w-3.5 h-3.5 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out ${state.options[t.key] ? 'translate-x-3.5' : 'translate-x-0'}"></div>
+                    </div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+
+            document.querySelectorAll('[data-toggle]').forEach(el => {
+                el.onclick = () => {
+                    const key = el.getAttribute('data-toggle');
+                    state.options[key] = !state.options[key];
+                    initToggles();
+                    validateInput();
+                };
+            });
+        }
+
+        function validateInput() {
+            const hasText = elements.userInput.value.trim().length > 0;
+            const canSend = hasText || (state.options.genImage && hasText);
+            
+            if (canSend && !state.isLoading) {
+                elements.sendBtn.classList.remove('bg-[#3F3F46]', 'text-[#71717A]', 'cursor-not-allowed');
+                elements.sendBtn.classList.add('bg-[#D4896A]', 'text-white');
+                elements.sendBtn.disabled = false;
+            } else {
+                elements.sendBtn.classList.add('bg-[#3F3F46]', 'text-[#71717A]', 'cursor-not-allowed');
+                elements.sendBtn.classList.remove('bg-[#D4896A]', 'text-white');
+                elements.sendBtn.disabled = true;
+            }
+        }
+
+        elements.userInput.oninput = () => {
+            validateInput();
+            elements.userInput.style.height = 'auto';
+            elements.userInput.style.height = elements.userInput.scrollHeight + 'px';
+        };
+
+        elements.userInput.onkeydown = (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+            }
+        };
+
+        elements.optionsBtn.onclick = (e) => {
+            e.stopPropagation();
+            elements.optionsMenu.classList.toggle('hidden');
+        };
+
+        window.onclick = () => elements.optionsMenu.classList.add('hidden');
+        elements.optionsMenu.onclick = (e) => e.stopPropagation();
+
+        // --- Fetch & AI Logic ---
+
+        async function fetchWithRetry(url, options, maxRetries = 5) {
+            let delay = 1000;
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error?.message || 'Unknown error');
+                    }
+                    return await response.json();
+                } catch (error) {
+                    if (i === maxRetries - 1) throw error;
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        function formatContent(text) {
+            if (!text) return "";
+            return text
+                .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") // basic escape
+                .replace(/```([\s\S]*?)```/g, (match, code) => {
+                    const lines = code.split('\n');
+                    const lang = lines[0].trim();
+                    const actualCode = lines.slice(1).join('\n').trim();
+                    return `<div class="my-4 bg-[#27272A] rounded-lg overflow-hidden border border-[#3F3F46]">
+                        ${lang ? `<div class="text-xs text-[#A1A1AA] px-4 py-2 bg-[#303036] border-b border-[#3F3F46] uppercase tracking-wider font-semibold">${lang}</div>` : ''}
+                        <pre class="p-4 overflow-x-auto"><code class="text-sm text-[#E4E4E7] font-mono">${actualCode}</code></pre>
+                    </div>`;
+                })
+                .replace(/\*\*([^*]+)\*\*/g, '<strong class="text-[#F4F4F5] font-semibold">$1</strong>')
+                .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+                .replace(/`([^`]+)`/g, '<code class="bg-[#27272A] text-[#E5A58A] px-1.5 py-0.5 rounded-md text-sm border border-[#3F3F46]">$1</code>')
+                .replace(/\n/g, '<br/>');
+        }
+
+        function createAccordion(tool) {
+            const id = 'tool-' + Math.random().toString(36).substr(2, 9);
+            let icon = 'help-circle', title = 'Tool', content = '';
+
+            if (tool.type === 'search') {
+                icon = 'search'; title = 'Google Search Results';
+                content = `<ul class="list-disc pl-5 space-y-1 mt-2">${tool.data.map(item => `
+                    <li class="text-sm text-[#A1A1AA]">
+                        <a href="${item.uri}" target="_blank" class="text-[#E5A58A] hover:underline font-medium">${item.title}</a>
+                    </li>`).join('')}</ul>`;
+            } else if (tool.type === 'image') {
+                icon = 'image'; title = 'Image Generated';
+                content = `<div class="mt-3"><img src="${tool.url}" class="max-w-full rounded-xl border border-[#3F3F46] shadow-sm" /></div>`;
+            } else if (tool.type === 'code') {
+                icon = 'code'; title = 'Code Executed';
+                content = `<div class="mt-2 space-y-2">
+                    <div class="bg-[#111113] rounded-md p-3 border border-[#27272A]">
+                        <div class="text-xs text-[#71717A] mb-1">Executable Code:</div>
+                        <pre class="text-xs text-[#A1A1AA] font-mono overflow-x-auto">${tool.code}</pre>
+                    </div>
+                    <div class="bg-[#27272A] border border-[#3F3F46] rounded-md p-3">
+                        <div class="text-xs text-[#A1A1AA] mb-1">Output:</div>
+                        <pre class="text-xs text-[#E4E4E7] font-mono overflow-x-auto">${tool.output}</pre>
+                    </div>
+                </div>`;
+            } else if (tool.type === 'structured') {
+                icon = 'file-json'; title = 'Structured Output Formatted';
+                content = `<div class="mt-2 bg-[#27272A] border border-[#3F3F46] rounded-md p-3">
+                    <pre class="text-xs text-[#E4E4E7] font-mono overflow-x-auto">${tool.data}</pre>
+                </div>`;
+            }
+
+            return `
+            <div class="my-3 accordion-item">
+                <button onclick="document.getElementById('${id}').classList.toggle('hidden'); this.querySelector('.chevron').classList.toggle('rotate-90')" class="flex items-center gap-2 text-sm text-[#A1A1AA] hover:text-[#E4E4E7] hover:bg-[#27272A] py-1.5 px-3 rounded-full transition-colors w-fit border border-transparent hover:border-[#3F3F46]">
+                    <i data-lucide="${icon}" class="w-4 h-4"></i>
+                    <span class="font-medium">${title}</span>
+                    <i data-lucide="chevron-right" class="w-3.5 h-3.5 chevron transition-transform"></i>
+                </button>
+                <div id="${id}" class="hidden pl-4 border-l-2 border-[#3F3F46] ml-3 mt-1 py-1">${content}</div>
+            </div>`;
+        }
+
+        function appendMessage(role, text, tools = []) {
+            elements.emptyState.classList.add('hidden');
+            const div = document.createElement('div');
+            div.className = "flex gap-4 group message-fade-in";
+            
+            const toolHtml = tools.map(t => createAccordion(t)).join('');
+            const avatar = role === 'user' 
+                ? `<div class="w-8 h-8 rounded-full bg-[#27272A] border border-[#3F3F46] flex items-center justify-center"><i data-lucide="user" class="w-4 h-4 text-[#A1A1AA]"></i></div>`
+                : `<div class="w-8 h-8 rounded-md bg-[#18181B] border border-[#3F3F46] flex items-center justify-center shadow-sm"><i data-lucide="sparkles" class="w-4 h-4 text-[#D4896A]"></i></div>`;
+
+            div.innerHTML = `
+                <div class="flex-none mt-1">${avatar}</div>
+                <div class="flex-1 min-w-0">
+                    <div class="font-medium text-sm text-[#F4F4F5] mb-1">${role === 'user' ? 'Leon' : 'LeonAI'}</div>
+                    ${toolHtml}
+                    <div class="text-[15px] leading-relaxed text-[#D4D4D8] break-words">${formatContent(text)}</div>
+                </div>
+            `;
+            
+            elements.messagesList.appendChild(div);
+            lucide.createIcons();
+            elements.anchor.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function handleSend() {
+            const input = elements.userInput.value.trim();
+            if (!input && !state.options.genImage) return;
+
+            state.isLoading = true;
+            appendMessage('user', input);
+            elements.userInput.value = '';
+            elements.userInput.style.height = 'auto';
+            validateInput();
+
+            // Loading indicator
+            const loader = document.createElement('div');
+            loader.id = 'typing-loader';
+            loader.className = "flex gap-4 animate-pulse mb-8";
+            loader.innerHTML = `<div class="w-8 h-8 rounded-md bg-[#27272A] border border-[#3F3F46]"></div><div class="flex-1 h-20 bg-[#27272A] rounded-xl"></div>`;
+            elements.messagesList.appendChild(loader);
+            elements.anchor.scrollIntoView({ behavior: 'smooth' });
+
+            try {
+                let combinedTools = [];
+                let finalResponseText = "";
+
+                // Image gen first
+                if (state.options.genImage && input) {
+                    try {
+                        const imgUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`;
+                        const imgRes = await fetchWithRetry(imgUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                instances: { prompt: input },
+                                parameters: { sampleCount: 1 }
+                            })
+                        });
+                        if (imgRes.predictions?.[0]?.bytesBase64Encoded) {
+                            const b64 = `data:image/png;base64,${imgRes.predictions[0].bytesBase64Encoded}`;
+                            combinedTools.push({ type: 'image', url: b64 });
+                        }
+                    } catch (e) {
+                        finalResponseText += `*(Note: Error generating image: ${e.message})*\n\n`;
+                    }
+                }
+
+                // Text gen
+                const history = state.messages.map(m => ({
+                    role: m.role === 'model' ? 'model' : 'user',
+                    parts: [{ text: m.text }]
+                }));
+                
+                let contextText = input;
+                if (state.options.urlContext) {
+                    contextText = `[System: Visit any URLs in the message if possible.]\n\n${input}`;
+                }
+                history.push({ role: 'user', parts: [{ text: contextText }] });
+
+                const payload = {
+                    contents: history,
+                    systemInstruction: { parts: [{ text: "You are LeonAI. Friendly, helpful, clear. Just a regular, smart AI helper." }] }
+                };
+
+                if (state.options.googleSearch) payload.tools = [{ google_search: {} }];
+                if (state.options.codeExec) {
+                    payload.tools = payload.tools || [];
+                    payload.tools.push({ codeExecution: {} });
+                }
+                if (state.options.structOut) payload.generationConfig = { responseMimeType: "application/json" };
+
+                const textUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                const textRes = await fetchWithRetry(textUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (textRes.candidates?.[0]) {
+                    const cand = textRes.candidates[0];
+                    const parts = cand.content?.parts || [];
+                    const textP = parts.find(p => p.text);
+                    
+                    if (textP) finalResponseText += textP.text;
+
+                    if (state.options.structOut && textP) {
+                        try {
+                            JSON.parse(textP.text);
+                            combinedTools.push({ type: 'structured', data: textP.text });
+                            finalResponseText = "Here is the structured data you asked for:";
+                        } catch(e) {}
+                    }
+
+                    const codeP = parts.find(p => p.executableCode);
+                    const resP = parts.find(p => p.codeExecutionResult);
+                    if (codeP || resP) {
+                        combinedTools.push({
+                            type: 'code',
+                            code: codeP?.executableCode?.code || 'No code',
+                            output: resP?.codeExecutionResult?.output || 'No output'
+                        });
+                    }
+
+                    const attr = cand.groundingMetadata?.groundingAttributions;
+                    if (attr?.length > 0) {
+                        const links = attr.map(a => ({ uri: a.web?.uri, title: a.web?.title })).filter(a => a.uri && a.title);
+                        if (links.length > 0) combinedTools.push({ type: 'search', data: links });
+                    }
+                }
+
+                state.messages.push({ role: 'user', text: input });
+                state.messages.push({ role: 'model', text: finalResponseText });
+                
+                loader.remove();
+                appendMessage('model', finalResponseText || "I'm not sure.", combinedTools);
+
+            } catch (err) {
+                loader.remove();
+                appendMessage('model', `Snag hit: ${err.message}`);
+            } finally {
+                state.isLoading = false;
+                validateInput();
+            }
+        }
+
+        // Init
+        initToggles();
+        lucide.createIcons();
     </script>
 </body>
 </html>
