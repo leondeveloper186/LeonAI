@@ -328,8 +328,8 @@
                     payload.tools = [{ google_search: {} }];
                 }
 
-                // Using the specific model version mentioned
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${activeKey}`;
+                // CHANGED: Using the more stable 'gemini-1.5-flash' model
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${activeKey}`;
                 const result = await apiRequest(url, payload);
 
                 const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "No response received.";
