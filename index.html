@@ -67,15 +67,15 @@
                 <!-- Options Menu -->
                 <div id="optionsMenu" class="hidden absolute right-0 mt-2 w-80 bg-[#1E1E24] rounded-xl shadow-2xl border border-[#3F3F46] p-3 z-50">
                     <div class="mb-4 pb-4 border-b border-[#3F3F46]">
-                        <label class="block text-[11px] uppercase tracking-wider font-bold text-[#71717A] mb-2">Gemini API Key</label>
+                        <label class="block text-[11px] uppercase tracking-wider font-bold text-[#71717A] mb-2">Gemini API Connection</label>
                         <div class="flex gap-2">
                             <input 
-                                type="password" 
-                                id="apiKeyInput" 
-                                placeholder="Paste key here..."
-                                class="flex-1 bg-[#27272A] border border-[#3F3F46] rounded-lg px-3 py-1.5 text-xs text-[#E4E4E7] focus:outline-none focus:border-[#D4896A]"
+                                type="text" 
+                                id="statusInput" 
+                                readonly
+                                value="Connected to Environment"
+                                class="flex-1 bg-[#27272A] border border-[#3F3F46] rounded-lg px-3 py-1.5 text-xs text-[#A1A1AA] focus:outline-none"
                             >
-                            <button id="saveKeyBtn" class="bg-[#D4896A] text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-[#c37a5b] transition-colors">Save</button>
                         </div>
                     </div>
                     <div class="space-y-1" id="toggleList">
@@ -126,10 +126,8 @@
     </div>
 
     <script>
-        // HARDCODED API KEY (Added from your prompt)
-        const HARDCODED_KEY = "AIzaSyCnbYeRzX9Q6C_wcaFHq-OPLTh8w75d-iY";
-        
-        let activeKey = HARDCODED_KEY || localStorage.getItem('leon_gemini_key') || "";
+        const apiKey = "";
+        const MODEL_NAME = "gemini-2.5-flash-preview-09-2025"; 
         
         const state = {
             messages: [],
@@ -152,21 +150,7 @@
             messagesList: document.getElementById('messagesList'),
             emptyState: document.getElementById('emptyState'),
             chatContainer: document.getElementById('chatContainer'),
-            anchor: document.getElementById('anchor'),
-            apiKeyInput: document.getElementById('apiKeyInput'),
-            saveKeyBtn: document.getElementById('saveKeyBtn')
-        };
-
-        if (activeKey) elements.apiKeyInput.value = activeKey;
-
-        elements.saveKeyBtn.onclick = () => {
-            const newKey = elements.apiKeyInput.value.trim();
-            if (newKey) {
-                localStorage.setItem('leon_gemini_key', newKey);
-                activeKey = newKey;
-                elements.saveKeyBtn.innerText = "Saved!";
-                setTimeout(() => elements.saveKeyBtn.innerText = "Save", 2000);
-            }
+            anchor: document.getElementById('anchor')
         };
 
         const toggles = [
@@ -235,27 +219,57 @@
         window.onclick = () => elements.optionsMenu.classList.add('hidden');
         elements.optionsMenu.onclick = (e) => e.stopPropagation();
 
-        async function apiRequest(url, body) {
-            if (!activeKey) throw new Error("API Key is missing.");
+        async function fetchGeminiResponse(userPrompt) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+            
+            let retries = 0;
+            const maxRetries = 5;
+            const delays = [1000, 2000, 4000, 8000, 16000];
+            
+            // Build simple history for payload
+            const contents = state.messages.map(m => ({
+                role: m.role === 'model' ? 'model' : 'user',
+                parts: [{ text: m.text }]
+            }));
+            contents.push({ role: "user", parts: [{ text: userPrompt }] });
 
-            // Minimal headers to reduce CORS pre-flight complexity
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(body)
-            });
+            const payload = {
+                contents: contents,
+                systemInstruction: { parts: [{ text: "You are LeonAI. Helpful and concise." }] }
+            };
 
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.error?.message || `API Error: ${response.status}`);
+            if (state.options.googleSearch) {
+                payload.tools = [{ google_search: {} }];
             }
-            return data;
+
+            while (retries < maxRetries) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!text) throw new Error("No response content");
+                    return text;
+                } catch (error) {
+                    retries++;
+                    if (retries >= maxRetries) throw error;
+                    await new Promise(resolve => setTimeout(resolve, delays[retries-1]));
+                }
+            }
         }
 
         function formatContent(text) {
             if (!text) return "";
+            // Simple markdown-style formatting for code and bold
             return text
                 .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") 
                 .replace(/```([\s\S]*?)```/g, (match, code) => {
@@ -273,7 +287,7 @@
         }
 
         function appendMessage(role, text) {
-            elements.emptyState.classList.add('hidden');
+            if (elements.emptyState) elements.emptyState.classList.add('hidden');
             const div = document.createElement('div');
             div.className = "flex gap-4 group message-fade-in";
             
@@ -312,34 +326,13 @@
             elements.anchor.scrollIntoView({ behavior: 'smooth' });
 
             try {
-                // Build simple history
-                const contents = state.messages.map(m => ({
-                    role: m.role === 'model' ? 'model' : 'user',
-                    parts: [{ text: m.text }]
-                }));
-                contents.push({ role: "user", parts: [{ text: input }] });
-
-                const payload = {
-                    contents: contents,
-                    systemInstruction: { parts: [{ text: "You are LeonAI. Helpful and concise." }] }
-                };
-
-                if (state.options.googleSearch) {
-                    payload.tools = [{ google_search: {} }];
-                }
-
-                // CHANGED: Using the more stable 'gemini-1.5-flash' model
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${activeKey}`;
-                const result = await apiRequest(url, payload);
-
-                const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "No response received.";
+                const response = await fetchGeminiResponse(input);
                 loader.remove();
-                appendMessage('model', text);
-                state.messages.push({ role: 'user', text: input }, { role: 'model', text });
-
+                appendMessage('model', response);
+                state.messages.push({ role: 'user', text: input }, { role: 'model', text: response });
             } catch (err) {
                 loader.remove();
-                appendMessage('model', `**Error:** ${err.message}. If this persists on GitHub, go to Google AI Studio and check if your API key has "Application Restrictions". For GitHub Pages, it should be set to "None" or include your specific URL.`);
+                appendMessage('model', `**Error:** ${err.message}`);
             } finally {
                 state.isLoading = false;
                 validateInput();
